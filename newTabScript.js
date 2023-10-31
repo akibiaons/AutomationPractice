@@ -1,9 +1,20 @@
-console.log("test script");
-//Utility functions defined here below:
+// NEWTABSCRIPT.JS **
+// Step 4: running the scripts for the new tab **
 
+// _DEV USE ONLY
+// Just to confirm its running n shit
+console.log("New tab script running!");
+// utility functions defined here below:
+
+//Clicks a certain button that says "Create household"
 function clickSpan() {
   let success = false; // flag to indicate if click was successful
+  // let wasClicked = false;  // Boolean to track if the desired span was clicked. another way of reading above^
+
+  // Fetch all span elements in the document.
   let spans = document.querySelectorAll("span");
+
+  // Loop through each span and click if it matches the desired text.
   spans.forEach((span) => {
     if (span.textContent.includes("Create a new household")) {
       // Create a new mouse event
@@ -14,11 +25,12 @@ function clickSpan() {
       });
       // Dispatch the event on the target element...
       span.dispatchEvent(event);
-      success = true;
+      success = true; // Return whether the desired span was clicked or not.
     }
   });
   return success; // Return the status
 }
+
 // Below is the function to click the add button span element in order to submit name data to the database...
 function addNameClick() {
   let success = false; // flag to indicate if click was successful
@@ -38,6 +50,7 @@ function addNameClick() {
   });
   return success; // Return the status
 }
+
 function setInputValueByAriaLabel(label, value) {
   const element = findElementByAriaLabel(label);
   if (element) {
@@ -78,13 +91,13 @@ function setupMutationObserver(data) {
 }
 // Utility functions defined above...
 
+// Listener to act upon receiving messages from the Chrome extension.
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   if (message.action === "automateData") {
     console.log("Received Excel Data:", message.data);
-    // Further processing can be done here
-    // Ensure the DOM content is loaded before trying to click the span
+
+    // Ensure webpage content (DOM) is fully loaded before taking action.
     if (document.readyState === "loading") {
-      // When loading has not finished yet
       document.addEventListener("DOMContentLoaded", function () {
         const openName = clickSpan(); // call the autoclicker here
         setupMutationObserver(message.data);
@@ -100,7 +113,18 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
 });
 
+// Process the provided Excel data to fill input fields.
 function processExcelData(data) {
+  // GUALBERTO BRANCH
+  // Assuming data is an array of objects with keys corresponding to aria labels
+  data.forEach((item) => {
+    for (const key in item) {
+      setInputValueByAriaLabel(key, item[key]); // or setTextByAriaLabel, as appropriate
+    }
+  });
+  //......
+
+  //   MAIN BRANCH
   console.log("Processing data", data);
   // Check if data is an array and has the required index
   if (Array.isArray(data) && data.length > 29) {

@@ -107,14 +107,6 @@ let feeTemplate = "";
 let jointFirst = "";
 let jointLast = "";
 
-try {
-} catch (error) {
-  chrome.runtime.sendMessage({
-    type: "logError",
-    error: "Error in function XYZ: " + error.message,
-  });
-}
-
 function setInputValueByAriaLabel(label, value) {
   const element = findElementByAriaLabel(label);
   if (element) {
@@ -234,10 +226,10 @@ function processExcelData(data, index) {
     jointLast = formData.JOINT_OWNER_LAST_NAME || "";
   } catch (error) {
     // Log the error and potentially handle it
-    console.error(error.message);
+
     chrome.runtime.sendMessage({
       type: "logError",
-      error: error.message,
+      error: "Error in process excel data function:" + error.message,
     });
   } finally {
     // Schedule the following actions if not the last index

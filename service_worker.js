@@ -20,11 +20,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Load current index from storage
-chrome.storage.local.get("currentIndex", function (data) {
-  currentIndex = data.currentIndex || 29; // Default to 29 if not set
-  console.log("Current index from storage:", currentIndex);
-});
+function initializeExtension() {
+  // Reset currentIndex to 29 for a fresh start or fetch it from storage
+  chrome.storage.local.get("currentIndex", function (data) {
+    currentIndex = data.currentIndex || 29;
+    console.log("Current index from storage:", currentIndex);
+  });
+
+  // Now, open the error log tab immediately
+  openErrorLogTab();
+}
 
 // This part of the script monitors any navigation to certain URLS **
 // As shown in the declaration for "targetURLS = [...]" **
@@ -69,6 +74,7 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
           files: ["newTabScript.js"],
         },
         (injectionResults) => {
+          initializeExtension();
           injectedTabs.add(tabId); // Add tabId to the set after successful injection
           // Iterating over Injection Results:
           for (const frameResult of injectionResults) {
@@ -146,9 +152,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 });
 
 function openErrorLogTab() {
-  const errorData = JSON.stringify(errorLogs, null, 2);
-  chrome.tabs.create({
-    url: "data:text/plain;charset=utf-8," + encodeURIComponent(errorData),
+  chrome.storage.local.set({ errorLogs: errorLogs }, function () {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL("error-log.html"),
+    });
   });
 }
 

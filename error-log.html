@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Error Log</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      .error-container {
+        margin: 20px;
+        padding: 20px;
+        border: 1px solid #ff0000;
+        background-color: #ffebeb;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Error Log</h1>
+    <div id="errorLog"></div>
+    <script src="error-log.js">
+              document.addEventListener('DOMContentLoaded', function () {
+          chrome.storage.local.get(['errorLogs'], function (data) {
+              const errorLogContainer = document.getElementById('errorLog');
+              const errorLogs = data.errorLogs || [];
+
+              errorLogs.forEach(error => {
+                  const errorElement = document.createElement('div');
+                  errorElement.classList.add('error-container');
+                  errorElement.textContent = error;
+                  errorLogContainer.appendChild(errorElement);
+              });
+          });
+      });
+    </script>
+  </body>
+</html>

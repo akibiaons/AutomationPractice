@@ -4,6 +4,7 @@
 // messages to the other scripts to run actions (functions) **
 
 // Exvcel sheet processor, JSONify's and console.logs err + succ
+
 document
   .getElementById("fileinput")
   .addEventListener("change", function (event) {
@@ -32,6 +33,32 @@ document
 
         // Turns provided file into json (readable data)
         excelData = XLSX.utils.sheet_to_json(worksheet, { raw: true });
+
+        function isInvalidData(item) {
+          // Replace the logic below with whatever makes an item "invalid" for your context
+          return !item.CLIENT_TITLE || !item.FIRST_NAME || !item.LAST_NAME;
+        }
+
+        const lastValidIndex = excelData.findIndex((item) =>
+          isInvalidData(item)
+        ); // Implement isInvalidData to determine invalid or header rows
+        const validExcelData = excelData.slice(0, lastValidIndex + 1); // Adjust this based on how you detect valid entries
+
+        chrome.storage.local.set(
+          {
+            excelData: validExcelData,
+            totalIndexes: lastValidIndex + 1, // Store the count of valid data entries
+          },
+          () => {
+            console.log(
+              "Excel data and total indexes stored in chrome storage"
+            );
+          }
+        );
+
+        chrome.storage.local.set({ currentIndex: 29 }, function () {
+          console.log("currentIndex reset to 29");
+        });
 
         // _DEV USE ONLY
         console.log(excelData);

@@ -35,6 +35,17 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
 });
 
+function isRowDataValid(formData) {
+  // List of required fields that must have data
+  const requiredFields = [
+    "CLIENT_TITLE",
+    "FIRST_NAME",
+    "LAST_NAME",
+    // Add any other required fields here
+  ];
+  return requiredFields.every((field) => formData[field]);
+}
+
 // Step two, click "Create household" button
 function clickSpan() {
   let success = false; // flag to indicate if click was successful
@@ -56,7 +67,6 @@ function clickSpan() {
         span.dispatchEvent(event);
         success = true; // Return whether the desired span was clicked or not.
         // _DEV USE
-        console.log("Creating new household button...");
       }
     } catch (error) {
       chrome.runtime.sendMessage({
@@ -92,25 +102,32 @@ let jointLast = "";
 // Find modal
 
 try {
-  // Some code that might fail
 } catch (error) {
   chrome.runtime.sendMessage({
     type: "logError",
     error: "Error in function XYZ: " + error.message,
   });
 }
+
 function startFirstModalPopulation(data, index) {
   const observerConfig = { attributes: false, childList: true, subtree: true };
 
   const modalObserverCallback = (mutationsList, observer) => {
-    for (const mutation of mutationsList) {
-      if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-        if (mutation.target.querySelector(".modal-draggable-handle")) {
-          console.log("MODAL_DETECTED");
-          processExcelData(data, index);
-          observer.disconnect(); // Disconnect after modal is found
+    try {
+      for (const mutation of mutationsList) {
+        if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
+          if (mutation.target.querySelector(".modal-draggable-handle")) {
+          }
         }
       }
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error inside of Modal Population: " + error.message,
+      });
+    } finally {
+      processExcelData(data, index);
+      observer.disconnect(); // Disconnect after modal is found
     }
   };
 
@@ -139,14 +156,12 @@ function addNameClick() {
   let success = false; // Flag to indicate if click was successful.
   let container = document.querySelector(".MuiDialogContent-root");
   if (!container) {
-    console.log("MODAL_NOT_FOUND");
     return false;
   }
-  console.log("MODAL FOUND: Searching <SPANS> 🔎");
+
   let spans = container.querySelectorAll("span");
   spans.forEach((span) => {
     if (span.textContent.includes("Add")) {
-      console.log(`SPAN FOUND WITH STRING "ADD"`, span);
       // Create a new mouse event
       let event = new MouseEvent("click", {
         view: window,
@@ -162,13 +177,24 @@ function addNameClick() {
 }
 
 function processExcelData(data, index) {
-  console.log("Processing data for index: ", index);
-  console.log("Received data:", data);
-  console.log("Data array length:", data.length);
-  console.log("Received index:", index);
+  if (index === data.length - 1) {
+    // If this is the last index, send a message to `background.js`
+    chrome.runtime.sendMessage({ action: "closeTab" });
+  }
 
-  if (Array.isArray(data) && index < data.length) {
-    const formData = data[index];
+  const formData = data[index];
+
+  if (!isRowDataValid(formData)) {
+    console.error(`Row ${index + 1} is missing required data. Skipping.`);
+    processExcelData(data, index + 1); // Skip to the next row
+    return;
+  }
+
+  try {
+    if (!Array.isArray(data) || index >= data.length) {
+      throw new Error("Invalid data format or index out of bounds");
+    }
+
     const clientTitle = formData.CLIENT_TITLE || "Default Title"; // Fallback value
     const firstName = formData.FIRST_NAME || "Default FName"; // Fallback value for name
     const lastName = formData.LAST_NAME || "Default LNAME"; //Fallback for last name
@@ -180,13 +206,21 @@ function processExcelData(data, index) {
     globalCustodianType = formData.CUSTODIAN || "Default Registration";
     globalProposalAmount = formData.ACCOUNT_VALUE || 0;
     globalProgram = formData.PROGRAM || "";
-    globalRiskTolerance = formData.PORTFOLIO_RISK || "";
+    globalRiskTolerance = formData.PORTFOLIO_RISK || "Moderate";
     nameOnPortfolio = formData.NAME_ON_PORTFOLIO || "";
     feeSchedule = formData.BILLING_FFREQUENCY || "Monthly";
     feeTemplate = formData.ADVISOR_FEE || "Standard";
     jointFirst = formData.JOINT_OWNER_FIRST_NAME || "";
     jointLast = formData.JOINT_OWNER_LAST_NAME || "";
-
+  } catch (error) {
+    // Log the error and potentially handle it
+    console.error(error.message);
+    chrome.runtime.sendMessage({
+      type: "logError",
+      error: error.message,
+    });
+  } finally {
+    // Schedule the following actions if not the last index
     setTimeout(() => {
       const addClicked = addNameClick();
       if (addClicked && globalRegistrationType.includes("Joint")) {
@@ -199,8 +233,6 @@ function processExcelData(data, index) {
         setupObserverForModalRemoval();
       }
     }, 3000);
-  } else {
-    console.error("Invalid data format or index out of bounds");
   }
 }
 
@@ -210,7 +242,7 @@ function clickAddMemberButton() {
   );
   if (addMemberButton) {
     addMemberButton.click();
-    console.log("Clicked 'Add member' button");
+
     setTimeout(() => {
       fillJointOwnerDetails();
     }, 3000);
@@ -220,7 +252,6 @@ function clickAddMemberButton() {
     //   setupObserverForModalRemoval();
     // }, 4000);
   } else {
-    console.log("'Add member' button not found");
   }
 }
 
@@ -248,10 +279,7 @@ function fillJointOwnerDetails() {
         clickRelationshipDropdown();
       }, 500);
     }, 1000); // Delay for lastNameInput
-
-    console.log("Joint owner names set");
   } else {
-    console.log("Joint owner name inputs not found");
   }
 }
 
@@ -262,20 +290,17 @@ function clickRelationshipDropdown() {
   if (dropdown) {
     // Simulate focusing on the dropdown
     dropdown.focus();
-    console.log("Focused on relationship dropdown");
 
     // Simulate clicking the dropdown to open options
     dropdown.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     dropdown.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     dropdown.click();
-    console.log("Clicked relationship dropdown");
 
     // Select a relationship option after a delay
     setTimeout(() => {
       selectRelationshipOption();
     }, 2000);
   } else {
-    console.log("Relationship dropdown not found");
   }
 }
 
@@ -292,7 +317,7 @@ function selectRelationshipOption() {
 
   if (targetOption) {
     targetOption.click();
-    console.log("Selected relationship:", optionText);
+
     setTimeout(() => {
       addNameClick();
       setTimeout(() => {
@@ -305,47 +330,55 @@ function selectRelationshipOption() {
     //   setupObserverForModalRemoval();
     // }, 2000);
   } else {
-    console.log("Relationship option not found");
   }
 }
 
-// Step three-six
-// Close modal
 function setupObserverForModalRemoval() {
   const targetNode = document.body;
   const config = { attributes: false, childList: true, subTree: true };
-  const callback = function (mutationsList, observer) {
-    for (const mutation of mutationsList) {
-      if (mutation.type === "childList" && mutation.removedNodes.length > 0) {
-        const modalRemoved = Array.from(mutation.removedNodes).some(
-          (node) =>
-            node.querySelector && node.querySelector(".modal-draggable-handle")
-        );
-        if (modalRemoved) {
-          console.log("MODAL REMOVED");
-          // Once the setupObserverForModalRemoval() is ran it will start the next function clickSaveAndContinue()
-          setTimeout(() => {
-            clickSaveAndContinue();
-          }, 4000);
 
-          // Disconnect the observer since we detected the removal of the modal
-          observer.disconnect();
+  const callback = function (mutationsList, observer) {
+    try {
+      for (const mutation of mutationsList) {
+        if (mutation.type === "childList" && mutation.removedNodes.length > 0) {
+          const modalRemoved = Array.from(mutation.removedNodes).some(
+            (node) =>
+              node.querySelector &&
+              node.querySelector(".modal-draggable-handle")
+          );
+          if (modalRemoved) {
+            // If you need to do anything after the modal is removed, do it here
+            // For example:
+            // performSomeActionAfterModalRemoval();
+          }
         }
       }
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in setupObserverForModalRemoval: " + error.message,
+      });
+    } finally {
+      // Disconnect the observer since we detected the removal of the modal
+      observer.disconnect();
+      // If you need to do something after disconnecting the observer, do it here
+      // For example, you might want to continue the workflow after the modal is gone:
+      setTimeout(() => {
+        clickSaveAndContinue();
+      }, 4000);
     }
   };
 
   const observer = new MutationObserver(callback);
   observer.observe(targetNode, config);
 }
+
 // Step four-one save and continue into the new risk and objective functions sections....
 function clickSaveAndContinue() {
   // Look for the button with text "Save and continue"
   let buttons = document.querySelectorAll("button");
   for (let button of buttons) {
     if (button.textContent.includes("Save and continue")) {
-      console.log(`BUTTON FOUND WITH STRING "SAVE AND CONTINUE"`, button);
-
       setTimeout(() => {
         // Create a new mouse event
         let event = new MouseEvent("click", {
@@ -364,7 +397,6 @@ function clickSaveAndContinue() {
       return;
     }
   }
-  console.log("Save and continue button not found");
 }
 // Step four-two
 // Click that we know our client's risks...
@@ -380,7 +412,6 @@ function clickRiskToleranceButtonAfterDelay() {
     );
     if (button) {
       button.click();
-      console.log("Clicked the 'I already know the risk tolerance' button.");
 
       // Introduce a delay after clicking the risk tolerance button and then adjust the slider
       setTimeout(() => {
@@ -421,7 +452,6 @@ function clickSliderAtPosition(percentage) {
       // Step four-two
       // Click slider to its proper location
       clickRiskAssessmentDropdown();
-      console.log("Clicked assessment dropdown");
     }, 2000);
   }
 }
@@ -445,7 +475,6 @@ function clickRiskAssessmentDropdown() {
       );
     });
     setTimeout(() => {
-      console.log("going to click n ext options");
       clickRiskAssessmentOption();
     }, 2000);
   }
@@ -468,7 +497,7 @@ function clickRiskAssessmentOption() {
 
     if (targetOption) {
       targetOption.click();
-      console.log("Clicked option - MAIN FUNC");
+
       clickTermsCheckbox();
       return true; // Indicate success
     }
@@ -496,7 +525,7 @@ function clickRiskAssessmentOption() {
       const dropdown = document.querySelector("div.MuiSelect-root");
       if (dropdown) {
         dropdown.click();
-        console.log("Clicked option - BACKUP FUNC");
+
         clickTermsCheckbox();
       }
     }, 300); // Adjust the timeout as necessary
@@ -514,9 +543,8 @@ function clickTermsCheckbox() {
 
   if (checkBoxButton) {
     checkBoxButton.click();
-    console.log("Checkbox button clicked!");
+
     setTimeout(() => {
-      console.log("Clicking agree to terms button");
       termsCheckboxConfirmation();
     }, 2000);
   }
@@ -536,14 +564,13 @@ function termsCheckboxConfirmation() {
 
   if (agreeButton) {
     agreeButton.click();
-    console.log("Agree button clicked!");
+
     setTimeout(() => {
       // Timeout to kickstart the saveandcontinue button
-      console.log("Clicking agree to terms button");
+
       saveAndContinueRandO();
     }, 1000);
   } else {
-    console.log("Agree button not found!");
   }
 }
 
@@ -554,12 +581,10 @@ function saveAndContinueRandO() {
 
   for (let span of spans) {
     if (span.textContent.includes("Save and continue")) {
-      console.log(`SPAN FOUND WITH STRING "SAVE AND CONTINUE"`, span);
       spanFound = true;
 
       setTimeout(() => {
         span.click(); // Simpler way to click without creating a MouseEvent
-        console.log("Clicked 'Save and continue'");
 
         setTimeout(() => {
           // This delay waits for the page to process the save and continue action
@@ -572,7 +597,6 @@ function saveAndContinueRandO() {
   }
 
   if (!spanFound) {
-    console.log("Save and continue span not found");
     // Handle the error case appropriately, possibly retrying or alerting the user
   }
 }
@@ -590,17 +614,15 @@ function clickAddAccountButton() {
       let button = span.closest("button");
       if (button) {
         button.click();
-        console.log('Clicked "Add account" button.');
+
         return true;
       }
     }
     setTimeout(() => {
-      console.log("Inputting proposal amount...");
       setProposalAmount();
     }, 5000);
   }
 
-  console.log("Add account button not found.");
   // Similar to above, handle the error case appropriately
   return false;
 }
@@ -621,12 +643,9 @@ function setProposalAmount() {
       // Simulate a change event to notify any JavaScript listening to this event
       const event = new Event("change", { bubbles: true });
       proposalAmountInput.dispatchEvent(event);
-
-      console.log(`Proposal amount set to ${amount}`);
     }
   }
   setTimeout(() => {
-    console.log("Clicking registration dropdown...");
     clickRegistrationTypeDropdown();
   }, 2000);
 }
@@ -650,7 +669,6 @@ function clickRegistrationTypeDropdown() {
     });
 
     setTimeout(() => {
-      console.log("Preparing to select an option...");
       clickRegistrationTypeOption();
     }, 2000); // 2-second delay
   }
@@ -668,9 +686,6 @@ function clickRegistrationTypeOption() {
 
     if (targetOption) {
       targetOption.click();
-      console.log(
-        `Clicked registration type option: ${globalRegistrationType}`
-      );
 
       setTimeout(() => {
         if (globalRegistrationType.includes("Joint")) {
@@ -693,14 +708,12 @@ function clickRegistrationTypeOption() {
     );
     if (selectOwnerButton) {
       selectOwnerButton.click();
-      console.log("Clicked 'select owner' button");
 
       // Wait for the secondary owner options to appear, then click
       setTimeout(() => {
         clickSecondaryOwnerDropdown();
       }, 3000); // Adjust the delay as necessary
     } else {
-      console.log("'select owner' button not found");
     }
   }
 
@@ -715,7 +728,7 @@ function clickRegistrationTypeOption() {
         dropdown.dispatchEvent(new MouseEvent(eventType, { bubbles: true }))
       );
       dropdown.click();
-      console.log("Interacted with 'Secondary owner' dropdown like a human");
+
       setTimeout(() => {
         clickAddMemberOption();
       }, 1000);
@@ -758,7 +771,6 @@ function clickRegistrationTypeOption() {
 
       if (triggerElement) {
         triggerElement.click();
-        console.log("Triggered the modal to open");
 
         // Since the modal opening is likely to be animated and take some time, set a timeout before trying to click the dropdown again
         setTimeout(() => {
@@ -794,7 +806,7 @@ function clickRegistrationTypeOption() {
 
       if (targetOption) {
         targetOption.click();
-        console.log(`Clicked on member: ${fullName}`);
+
         setTimeout(() => {
           clickSaveButton();
         }, 1000);
@@ -822,7 +834,7 @@ function clickRegistrationTypeOption() {
 
     if (saveButton) {
       saveButton.click();
-      console.log("Clicked the 'Save' button");
+
       setTimeout(() => {
         clickCustodianDropdown();
       }, 1000);
@@ -853,7 +865,6 @@ function clickRegistrationTypeOption() {
       const dropdown = document.querySelector("div.MuiSelect-root");
       if (dropdown) {
         dropdown.click();
-        console.log("Opened dropdown - waiting for options...");
       }
     }, 300); // Adjust the timeout as necessary
   } else {
@@ -890,7 +901,6 @@ function clickCustodianDropdown() {
 
     // Set a timeout to handle subsequent actions
     setTimeout(() => {
-      console.log("Preparing to select an option...");
       clickCustodianOption();
     }, 4000); // 2-second delay
   }
@@ -908,10 +918,9 @@ function clickCustodianOption() {
 
     if (targetOption) {
       targetOption.click();
-      console.log(`Clicked registration type option: ${globalCustodianType}`);
+
       // Add any additional logic you need after clicking the option
       setTimeout(() => {
-        console.log("Preparing to select an option...");
         selectExistingStrategy();
       }, 4000); // 2-second delay
       return true; // Indicate success
@@ -940,7 +949,6 @@ function clickCustodianOption() {
       const dropdown = document.querySelector("div.MuiSelect-root");
       if (dropdown) {
         dropdown.click();
-        console.log("Opened dropdown - waiting for options...");
       }
     }, 4000); // Adjust the timeout as necessary
   } else {
@@ -957,16 +965,14 @@ function selectExistingStrategy() {
     if (span.textContent.trim() === "Select an existing strategy") {
       // Simulate a click on this span
       span.click();
-      console.log('Clicked "Select an existing strategy" span.');
+
       setTimeout(() => {
-        console.log("Preparing to select an option...");
         clickProgramOptionByContent(globalProgram);
       }, 2000); // 2-second delay
       return true; // Indicate that the span was found and clicked
     }
   }
 
-  console.log("Select an existing strategy span not found.");
   return false; // Indicate that the span was not found
 }
 
@@ -983,10 +989,8 @@ function clickProgramOptionByContent(programString) {
 
     if (targetOption) {
       targetOption.click();
-      console.log(`Clicked program option with string "${programString}"`);
 
       setTimeout(() => {
-        console.log("Preparing to select an option...");
         clickStartSelectingButton();
       }, 15000);
       return true; // Indicate success
@@ -1009,7 +1013,6 @@ function clickProgramOptionByContent(programString) {
 
   // Try to click the program option immediately in case it's already visible
   if (!tryClickProgramOption()) {
-    console.log("Waiting for modal to appear...");
   }
 }
 
@@ -1038,8 +1041,6 @@ function setInputValueForNameFilterWhenModalAppears(inputValue) {
       ["change", "input"].forEach((event) => {
         input.dispatchEvent(new Event(event, { bubbles: true }));
       });
-
-      console.log(`Set input value to "${inputValue}"`);
 
       setTimeout(() => {
         findRowAndClickRadioButton(nameOnPortfolio);
@@ -1074,7 +1075,6 @@ function setInputValueForNameFilterWhenModalAppears(inputValue) {
 
   // Try to set the input value immediately in case the modal is already visible
   if (!trySetInputValue()) {
-    console.log("Waiting for the modal to appear...");
   }
 }
 
@@ -1086,13 +1086,12 @@ function findRowAndClickRadioButton(nameOnPortfolio) {
     );
 
     if (nameCell) {
-      console.log("Found row with portfolio name:", nameOnPortfolio);
       const radioButton = nameCell.parentNode.querySelector(
         'button[role="radio"]'
       );
       if (radioButton) {
         radioButton.click();
-        console.log("Clicked the radio button for", nameOnPortfolio);
+
         // Now proceed to click the "Select product" button after a delay
         setTimeout(() => {
           clickSelectProductButton();
@@ -1108,7 +1107,6 @@ function clickSelectProductButton() {
     buttons.forEach(function (button) {
       if (button.textContent.trim() === "Add") {
         button.click();
-        console.log("Add button clicked");
 
         clickQuarterlyRadioButton();
       }
@@ -1124,7 +1122,6 @@ function clickSelectProductButton() {
       setTimeout(() => {
         clickSaveButton();
       }, 3000);
-      console.log('Clicked the "Quarterly" radio button.');
     } else {
       console.error("Quarterly radio button not found.");
     }
@@ -1141,7 +1138,6 @@ function clickSelectProductButton() {
       setTimeout(() => {
         rebalanceSave();
       }, 1000);
-      console.log('Clicked the "Save" button.');
     } else {
       console.error("Save button not found.");
     }
@@ -1156,13 +1152,12 @@ function clickSelectProductButton() {
   if (selectProductButton && !selectProductButton.disabled) {
     // Check if the button exists and is not disabled
     selectProductButton.click();
-    console.log('Clicked the "Select product" button.');
+
     setTimeout(() => {
       saveContinue();
       if (globalProgram === "UMA") {
         setTimeout(() => {
           clickAddButtonByText();
-          console.log("referenceting");
         }, 7000);
       }
       if (globalProgram !== "UMA") {
@@ -1175,7 +1170,6 @@ function clickSelectProductButton() {
       }
     }, 3000);
   } else {
-    console.log("Button not found or it is disabled.");
   }
 }
 
@@ -1194,12 +1188,10 @@ function saveContinue() {
 
   for (let span of spans) {
     if (span.textContent.includes("Save and continue")) {
-      console.log(`SPAN FOUND WITH STRING "SAVE AND CONTINUE"`, span);
       spanFound = true;
 
       setTimeout(() => {
         span.click(); // Simpler way to click without creating a MouseEvent
-        console.log("Clicked 'Save and continue'");
       }, 2000); // Waiting for animations to complete
 
       break; // Exit the loop as we've found and clicked the span
@@ -1236,16 +1228,14 @@ function clickFeeScheduleDropdownAndSelectOption() {
 
       if (optionToSelect) {
         optionToSelect.click();
-        console.log(`Option "${optionText}" has been clicked.`);
+
         setTimeout(() => {
           clickEditAdvisorFeeButton();
         }, 8000);
       } else {
-        console.log(`Option "${optionText}" not found.`);
       }
     }, 500); // Adjust this timeout to match the time it takes for the options to appear
   } else {
-    console.log("Dropdown for fee schedule not found.");
   }
 }
 
@@ -1258,7 +1248,7 @@ function clickEditAdvisorFeeButton() {
   // Check if the button exists
   if (button) {
     button.click(); // Click the button
-    console.log('Clicked the "edit-advisor-fee" button.');
+
     setTimeout(() => {
       setupModalObserverAndClickDropdown();
       setTimeout(() => {
@@ -1279,7 +1269,6 @@ function setupModalObserverAndClickDropdown() {
         );
 
         if (modalExists) {
-          console.log("Modal detected, clicking dropdown...");
           setTimeout(() => {
             clickDropdownMenu();
           }, 5000);
@@ -1320,12 +1309,11 @@ function clickDropdownMenu() {
         })
       );
     });
-    console.log("Dropdown with 'Select a fee template' clicked.");
+
     setTimeout(() => {
       clickFeeTemplateOption(feeTemplate);
     }, 5000);
   } else {
-    console.log("Specific dropdown not found.");
   }
 }
 
@@ -1345,12 +1333,11 @@ function clickFeeTemplateOption(feeTemplate) {
 
       if (targetOption) {
         targetOption.click();
-        console.log(`Clicked fee template option: ${feeTemplate}`);
+
         setTimeout(() => {
           clickApplyButton(feeTemplate);
         }, 1000);
       } else {
-        console.log(`Fee template option '${feeTemplate}' not found.`);
       }
     }
   }, 500); // Check every 500 milliseconds
@@ -1366,12 +1353,11 @@ function clickApplyButton() {
 
   if (targetButton) {
     targetButton.click();
-    console.log("Clicked 'Apply' button.");
+
     setTimeout(() => {
       clickAgreeButton();
     }, 5000);
   } else {
-    console.log("'Apply' button not found.");
   }
 }
 
@@ -1386,15 +1372,13 @@ function clickAgreeButton() {
     const button = span.parentElement.querySelector('button[role="checkbox"]');
     if (button) {
       button.click();
-      console.log("Clicked 'I agree' checkbox button.");
+
       setTimeout(() => {
         clickContinueButton();
       }, 5000);
     } else {
-      console.log("'I agree' checkbox button not found.");
     }
   } else {
-    console.log("Span with 'I agree' text not found.");
   }
 }
 
@@ -1410,7 +1394,7 @@ function clickContinueButton() {
     if (button) {
       if (!button.disabled) {
         button.click();
-        console.log("Clicked 'Continue' button.");
+
         setTimeout(() => {
           clickGenerateDocumentsButton();
         }, 5000);
@@ -1430,15 +1414,13 @@ function clickGenerateDocumentsButton() {
     const button = span.closest("button");
     if (button) {
       button.click();
-      console.log("Clicked 'Generate documents' button.");
+
       setTimeout(() => {
         closeCurrentTab();
       }, 2000);
     } else {
-      console.log("'Generate documents' button not found.");
     }
   } else {
-    console.log("Span with 'Generate documents' text not found.");
   }
 }
 

@@ -3,18 +3,22 @@
 
 const injectedTabs = new Set();
 let currentIndex = 29; // Starting index
-let excelData; // Array of data from Excel sheet
+let excelData;
 let errorLogs = [];
+let totalIndexes;
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "setTotalIndexes") {
+    totalIndexes = message.totalIndexes;
+  }
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "logError") {
     errorLogs.push({ tabId: sender.tab.id, error: message.error });
-    console.log("Error logged:", message.error);
+    console.log(`Error logged for index ${currentIndex}:`, message.error);
   }
 });
-
-// Save current index to storage
-chrome.storage.local.set({ currentIndex: currentIndex });
 
 // Load current index from storage
 chrome.storage.local.get("currentIndex", function (data) {
@@ -132,7 +136,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         console.error("Error setting currentIndex:", chrome.runtime.lastError);
       } else {
         console.log("Index saved to storage:", currentIndex);
-        // After saving, send a message to start next proposal
         sendStartNextProposalMessage();
       }
     });
@@ -149,8 +152,10 @@ function openErrorLogTab() {
   });
 }
 
-function checkIfProcessingComplete(currentIndex, totalIndexes) {
-  if (currentIndex >= totalIndexes) {
-    openErrorLogTab();
-  }
+function checkIfProcessingComplete() {
+  chrome.storage.local.get(["currentIndex", "totalIndexes"], function (data) {
+    if (data.currentIndex >= data.totalIndexes) {
+      openErrorLogTab();
+    }
+  });
 }

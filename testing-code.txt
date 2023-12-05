@@ -1015,3 +1015,12 @@ function APM(nameOnPortfolio) {
 
   setInputValueForNameFilterWhenModalAppears(nameOnPortfolio);
 }
+
+try {
+} catch (error) {
+  chrome.runtime.sendMessage({
+    type: "logError",
+    error: "Error in function XYZ: " + error.message,
+  });
+}
+

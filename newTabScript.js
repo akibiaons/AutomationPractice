@@ -41,7 +41,14 @@ function isRowDataValid(formData) {
     "CLIENT_TITLE",
     "FIRST_NAME",
     "LAST_NAME",
-    // Add any other required fields here
+    "ACCOUNT_VALUE",
+    "ADVISOR_FEE",
+    "CUSTODIAN",
+    "NAME_ON_PORTFOLIO",
+    "PORTFOLIO_RISK",
+    "PROGRAM",
+    "PROPOSAL_TITLE",
+    "REGISTRATION",
   ];
   return requiredFields.every((field) => formData[field]);
 }
@@ -99,7 +106,6 @@ let feeSchedule = "";
 let feeTemplate = "";
 let jointFirst = "";
 let jointLast = "";
-// Find modal
 
 try {
 } catch (error) {
@@ -107,6 +113,57 @@ try {
     type: "logError",
     error: "Error in function XYZ: " + error.message,
   });
+}
+
+function setInputValueByAriaLabel(label, value) {
+  const element = findElementByAriaLabel(label);
+  if (element) {
+    element.value = value;
+    // Manually trigger a change event
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+function findElementByAriaLabel(label) {
+  return document.querySelector(`[aria-label="${label}"]`);
+}
+
+function clickAddMemberButton() {
+  const addMemberButton = document.querySelector(
+    'button[aria-label="add-member"]'
+  );
+  if (addMemberButton) {
+    addMemberButton.click();
+
+    setTimeout(() => {
+      fillJointOwnerDetails();
+    }, 3000);
+  } else {
+  }
+}
+
+function addNameClick() {
+  let success = false; // Flag to indicate if click was successful.
+  let container = document.querySelector(".MuiDialogContent-root");
+  if (!container) {
+    return false;
+  }
+
+  let spans = container.querySelectorAll("span");
+  spans.forEach((span) => {
+    if (span.textContent.includes("Add")) {
+      // Create a new mouse event
+      let event = new MouseEvent("click", {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+      });
+      // Dispatch the event on the target element...
+      span.dispatchEvent(event);
+      success = true;
+    }
+  });
+  return success; // Return the status
 }
 
 function startFirstModalPopulation(data, index) {
@@ -135,57 +192,20 @@ function startFirstModalPopulation(data, index) {
   observer.observe(document.body, observerConfig);
 }
 
-function setInputValueByAriaLabel(label, value) {
-  const element = findElementByAriaLabel(label);
-  if (element) {
-    element.value = value;
-    // Manually trigger a change event
-    element.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-}
-
-function findElementByAriaLabel(label) {
-  return document.querySelector(`[aria-label="${label}"]`);
-}
-
-// Step three-three
-// Now Run processExcelData()
-
-// Pre defining addNameClick()
-function addNameClick() {
-  let success = false; // Flag to indicate if click was successful.
-  let container = document.querySelector(".MuiDialogContent-root");
-  if (!container) {
-    return false;
-  }
-
-  let spans = container.querySelectorAll("span");
-  spans.forEach((span) => {
-    if (span.textContent.includes("Add")) {
-      // Create a new mouse event
-      let event = new MouseEvent("click", {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-      });
-      // Dispatch the event on the target element...
-      span.dispatchEvent(event);
-      success = true;
-    }
-  });
-  return success; // Return the status
-}
-
 function processExcelData(data, index) {
+  const formData = data[index];
+
+  console.log("Here are all the indece", data);
+  console.log("Here is the current index:", index);
+
+  chrome.runtime.sendMessage({ action: index });
+
   if (index === data.length - 1) {
-    // If this is the last index, send a message to `background.js`
     chrome.runtime.sendMessage({ action: "closeTab" });
   }
 
-  const formData = data[index];
-
   if (!isRowDataValid(formData)) {
-    console.error(`Row ${index + 1} is missing required data. Skipping.`);
+    console.error(`Row ${index} is missing required data. Skipping.`);
     processExcelData(data, index + 1); // Skip to the next row
     return;
   }
@@ -236,25 +256,6 @@ function processExcelData(data, index) {
   }
 }
 
-function clickAddMemberButton() {
-  const addMemberButton = document.querySelector(
-    'button[aria-label="add-member"]'
-  );
-  if (addMemberButton) {
-    addMemberButton.click();
-
-    setTimeout(() => {
-      fillJointOwnerDetails();
-    }, 3000);
-
-    // Continue with the next step
-    // setTimeout(() => {
-    //   setupObserverForModalRemoval();
-    // }, 4000);
-  } else {
-  }
-}
-
 function fillJointOwnerDetails() {
   const firstNameInput = document.querySelector(
     'input[aria-label="First name"]'
@@ -269,17 +270,21 @@ function fillJointOwnerDetails() {
   }
 
   if (firstNameInput && lastNameInput) {
-    firstNameInput.value = jointFirst;
-    triggerInputEvents(firstNameInput);
-
-    setTimeout(() => {
+    try {
+      firstNameInput.value = jointFirst;
+      triggerInputEvents(firstNameInput);
       lastNameInput.value = jointLast;
       triggerInputEvents(lastNameInput);
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
       setTimeout(() => {
         clickRelationshipDropdown();
       }, 500);
-    }, 1000); // Delay for lastNameInput
-  } else {
+    }
   }
 }
 
@@ -305,8 +310,6 @@ function clickRelationshipDropdown() {
 }
 
 function selectRelationshipOption() {
-  // Example: Selecting 'Spouse' as the relationship
-  // Update the selector or text content based on actual options available
   const optionText = "Other"; // Update this based on your needs
   const options = document.querySelectorAll(
     "ul.MuiList-root li.MuiMenuItem-root"
@@ -316,20 +319,21 @@ function selectRelationshipOption() {
   );
 
   if (targetOption) {
-    targetOption.click();
-
-    setTimeout(() => {
-      addNameClick();
+    try {
+      targetOption.click();
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
       setTimeout(() => {
-        clickSaveAndContinue();
+        addNameClick();
+        setTimeout(() => {
+          clickSaveAndContinue();
+        }, 500);
       }, 500);
-    }, 500);
-
-    // Continue with the next step after selecting the relationship
-    // setTimeout(() => {
-    //   setupObserverForModalRemoval();
-    // }, 2000);
-  } else {
+    }
   }
 }
 
@@ -373,29 +377,34 @@ function setupObserverForModalRemoval() {
   observer.observe(targetNode, config);
 }
 
-// Step four-one save and continue into the new risk and objective functions sections....
 function clickSaveAndContinue() {
-  // Look for the button with text "Save and continue"
   let buttons = document.querySelectorAll("button");
-  for (let button of buttons) {
-    if (button.textContent.includes("Save and continue")) {
-      setTimeout(() => {
-        // Create a new mouse event
-        let event = new MouseEvent("click", {
-          view: window,
-          bubbles: true,
-          cancelable: true,
-        });
-        // Dispatch the event on the button
-        button.dispatchEvent(event);
 
-        // Step four-one
-        // Click "I know my clients risk tolerance" button
-        clickRiskToleranceButtonAfterDelay();
-      }, 3000);
+  try {
+    for (let button of buttons) {
+      if (button.textContent.includes("Save and continue")) {
+        setTimeout(() => {
+          let event = new MouseEvent("click", {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+          });
 
-      return;
+          button.dispatchEvent(event);
+        }, 1000);
+
+        return;
+      }
     }
+  } catch (error) {
+    chrome.runtime.sendMessage({
+      type: "logError",
+      error: "Error in function XYZ: " + error.message,
+    });
+  } finally {
+    setTimeout(() => {
+      clickRiskToleranceButtonAfterDelay();
+    }, 4000);
   }
 }
 // Step four-two
@@ -406,133 +415,149 @@ function adjustRiskToleranceSlider() {
 }
 
 function clickRiskToleranceButtonAfterDelay() {
+  const button = document.querySelector(
+    'button[aria-label="I already know my client\'s risk tolerance"]'
+  );
   setTimeout(() => {
-    const button = document.querySelector(
-      'button[aria-label="I already know my client\'s risk tolerance"]'
-    );
     if (button) {
-      button.click();
-
-      // Introduce a delay after clicking the risk tolerance button and then adjust the slider
-      setTimeout(() => {
-        // Step four-two
-        // Click slider to its proper location
-        adjustRiskToleranceSlider();
-      }, 2000); // Delay of 2 seconds (2000 milliseconds) to adjust the slider after clicking the button
+      try {
+        button.click();
+      } catch (error) {
+        chrome.runtime.sendMessage({
+          type: "logError",
+          error: "Error in function XYZ: " + error.message,
+        });
+      } finally {
+        setTimeout(() => {
+          adjustRiskToleranceSlider();
+        }, 2000);
+      }
     }
-  }, 5000); // Delay of 5 seconds (5000 milliseconds) to click the button
+  }, 5000);
 }
 
-// Step four-three
-// Slide the correlating client risks, based on RISK_ASSESSMENT::
 function clickSliderAtPosition(percentage) {
   const sliderContainers = document.querySelectorAll('div[role="button"]');
-
   const slider = Array.from(sliderContainers).find((container) => {
     return Array.from(container.children).some((child) =>
       child.style.left.includes("calc")
     );
   });
 
+  const rect = slider.getBoundingClientRect();
+  const clickX = rect.left + rect.width * (percentage / 100);
+  const clickY = rect.top + rect.height / 2;
+
   if (slider) {
-    const rect = slider.getBoundingClientRect();
-    const clickX = rect.left + rect.width * (percentage / 100);
-    const clickY = rect.top + rect.height / 2;
+    try {
+      const clickEvent = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: clickX,
+        clientY: clickY,
+      });
 
-    const clickEvent = new MouseEvent("click", {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: clickX,
-      clientY: clickY,
-    });
-
-    slider.dispatchEvent(clickEvent);
-    setTimeout(() => {
-      // Step four-two
-      // Click slider to its proper location
-      clickRiskAssessmentDropdown();
-    }, 2000);
+      slider.dispatchEvent(clickEvent);
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
+      setTimeout(() => {
+        // Step four-two
+        // Click slider to its proper location
+        clickRiskAssessmentDropdown();
+      }, 2000);
+    }
   }
 }
 
-// Step four-four
-// Open the dropdown after the slider
 function clickRiskAssessmentDropdown() {
   const dropdown = document.querySelector(
     "div.MuiSelect-root[aria-haspopup='listbox']"
   );
 
   if (dropdown) {
-    dropdown.focus();
-    ["mousedown", "mouseup", "click"].forEach((eventType) => {
-      dropdown.dispatchEvent(
-        new MouseEvent(eventType, {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-        })
-      );
-    });
-    setTimeout(() => {
-      clickRiskAssessmentOption();
-    }, 2000);
+    try {
+      dropdown.focus();
+      ["mousedown", "mouseup", "click"].forEach((eventType) => {
+        dropdown.dispatchEvent(
+          new MouseEvent(eventType, {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          })
+        );
+      });
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
+      setTimeout(() => {
+        clickRiskAssessmentOption();
+      }, 2000);
+    }
   }
 }
 
-// Step four-five
-// Click the option after dropdown is clicked and opened...
 function clickRiskAssessmentOption() {
-  const optionText =
-    "Existing client (Current risk-tolerance questionnaire is on file)";
+  try {
+    const tryClickOption = () => {
+      const options = Array.from(
+        document.querySelectorAll("ul.MuiList-root li.MuiMenuItem-root")
+      );
+      const targetOption = options.find((option) =>
+        option.textContent.includes(optionText)
+      );
 
-  // Define a function to click the target option when it's available
-  const tryClickOption = () => {
-    const options = Array.from(
-      document.querySelectorAll("ul.MuiList-root li.MuiMenuItem-root")
-    );
-    const targetOption = options.find((option) =>
-      option.textContent.includes(optionText)
-    );
-
-    if (targetOption) {
-      targetOption.click();
-
-      clickTermsCheckbox();
-      return true; // Indicate success
-    }
-    return false; // Indicate failure
-  };
-
-  // Create an observer instance
-  const observer = new MutationObserver((mutations, obs) => {
-    if (tryClickOption()) {
-      // Try to click the option
-      obs.disconnect(); // If successful, disconnect the observer
-    }
-  });
-
-  // Start observing the body for changes in the DOM
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  // Try to click the option immediately in case it's already there
-  if (!tryClickOption()) {
-    // If the option was not clicked successfully, trigger the dropdown to show options
-    setTimeout(() => {
-      const dropdown = document.querySelector("div.MuiSelect-root");
-      if (dropdown) {
-        dropdown.click();
-
+      if (targetOption) {
+        targetOption.click();
         clickTermsCheckbox();
+        return true; // Indicate success
       }
-    }, 300); // Adjust the timeout as necessary
-  } else {
-    observer.disconnect(); // If we clicked the option, disconnect the observer
+      return false; // Indicate failure
+    };
+
+    const optionText =
+      "Existing client (Current risk-tolerance questionnaire is on file)";
+
+    const observer = new MutationObserver((mutations, obs) => {
+      if (tryClickOption()) {
+        obs.disconnect(); // If successful, disconnect the observer
+      }
+    });
+
+    // Start observing the body for changes in the DOM
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Try to click the option immediately in case it's already there
+    if (!tryClickOption()) {
+      // If the option was not clicked successfully, trigger the dropdown to show options
+      setTimeout(() => {
+        const dropdown = document.querySelector("div.MuiSelect-root");
+        if (dropdown) {
+          dropdown.click();
+          clickTermsCheckbox();
+        }
+      }, 300); // Adjust the timeout as necessary
+    } else {
+      observer.disconnect(); // If we clicked the option, disconnect the observer
+    }
+  } catch (error) {
+    chrome.runtime.sendMessage({
+      type: "logError",
+      error: "Error in clickRiskAssessmentOption(): " + error.message,
+    });
   }
 }
+
 // Step four-six
 // Click the terms dropdown...
 function clickTermsCheckbox() {
@@ -542,17 +567,22 @@ function clickTermsCheckbox() {
   );
 
   if (checkBoxButton) {
-    checkBoxButton.click();
-
-    setTimeout(() => {
-      termsCheckboxConfirmation();
-    }, 2000);
+    try {
+      checkBoxButton.click();
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function clickTermsCheckbox(): " + error.message,
+      });
+    } finally {
+      setTimeout(() => {
+        termsCheckboxConfirmation();
+      }, 2000);
+    }
   }
 }
-// Step four-seven
-// Click the checkbox to accept current clients risk and investment objective...
+
 function termsCheckboxConfirmation() {
-  // Use XPath to find the button based on its text content
   var xpath = "//button[.//span[contains(text(), 'I agree')]]";
   var agreeButton = document.evaluate(
     xpath,
@@ -563,14 +593,20 @@ function termsCheckboxConfirmation() {
   ).singleNodeValue;
 
   if (agreeButton) {
-    agreeButton.click();
+    try {
+      agreeButton.click();
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
+      setTimeout(() => {
+        // Timeout to kickstart the saveandcontinue button
 
-    setTimeout(() => {
-      // Timeout to kickstart the saveandcontinue button
-
-      saveAndContinueRandO();
-    }, 1000);
-  } else {
+        saveAndContinueRandO();
+      }, 1000);
+    }
   }
 }
 
@@ -584,24 +620,24 @@ function saveAndContinueRandO() {
       spanFound = true;
 
       setTimeout(() => {
-        span.click(); // Simpler way to click without creating a MouseEvent
-
-        setTimeout(() => {
-          // This delay waits for the page to process the save and continue action
-          clickAddAccountButton();
-        }, 7000); // The delay might need adjustment based on actual page behavior
+        try {
+          span.click(); // Simpler way to click without creating a MouseEvent
+        } catch (error) {
+          chrome.runtime.sendMessage({
+            type: "logError",
+            error: "Error in function saveAndContinueRandO(): " + error.message,
+          });
+        } finally {
+          setTimeout(() => {
+            clickAddAccountButton();
+          }, 7000);
+        }
       }, 5000); // Waiting for animations to complete
 
       break; // Exit the loop as we've found and clicked the span
     }
   }
-
-  if (!spanFound) {
-    // Handle the error case appropriately, possibly retrying or alerting the user
-  }
 }
-
-// BELOW ARE THE FUNCTIONS TO MANIPULATE THE ACCOUNT STRATEGY SECTION
 
 //Version 0.39.1 - Nov 7 2023
 // step five-one: Click the add account button
@@ -612,21 +648,29 @@ function clickAddAccountButton() {
     if (span.textContent.trim() === "Add account") {
       // Using trim() to remove any leading/trailing whitespace
       let button = span.closest("button");
-      if (button) {
-        button.click();
 
-        return true;
+      if (button) {
+        try {
+          button.click();
+          return true;
+        } catch (error) {
+          chrome.runtime.sendMessage({
+            type: "logError",
+            error: "Error in function XYZ: " + error.message,
+          });
+        } finally {
+          setTimeout(() => {
+            setProposalAmount();
+          }, 5000);
+        }
       }
     }
-    setTimeout(() => {
-      setProposalAmount();
-    }, 5000);
   }
 
-  // Similar to above, handle the error case appropriately
   return false;
 }
 
+//  TRY AND CATCH
 function setProposalAmount() {
   // Find the input field for the proposal amount by its aria-label
   const proposalAmountInput = document.querySelector(

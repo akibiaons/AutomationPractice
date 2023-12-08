@@ -60,13 +60,10 @@ document
           console.log("currentIndex reset to 29");
         });
 
-        // _DEV USE ONLY
-        console.log(excelData);
-
         // Storing the excelData below with chrome storage api
         chrome.storage.local.set({ excelData: excelData }, function () {
-          // _DEV US ONLY
           console.log("Excel data stored in chrome storage");
+          chrome.runtime.sendMessage({ action: "fileUploaded" });
         });
       };
 
@@ -78,6 +75,7 @@ document
 // Below is the logic to start the automation injection process by opening a new window. As well as sending the
 // - parsed data to the newTabScript, via the service_worker.js.....
 document.getElementById("start").addEventListener("click", () => {
+  chrome.runtime.sendMessage({ action: "openErrorLog" });
   // Below is the code that sends a message to start the injection process.
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const activeTab = tabs[0];

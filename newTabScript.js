@@ -35,6 +35,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
 });
 
+window.onerror = function (message, source, lineno, colno, error) {
+  const errorMsg = `Error in script: ${source} at line ${lineno}, column ${colno}: ${message}`;
+  chrome.runtime.sendMessage({
+    type: "logError",
+    error: errorMsg,
+  });
+  return false; // Propagate the error message to the console as well
+};
+
 function isRowDataValid(formData) {
   // List of required fields that must have data
   const requiredFields = [
@@ -160,6 +169,21 @@ function addNameClick() {
 
 function startFirstModalPopulation(data, index) {
   const observerConfig = { attributes: false, childList: true, subtree: true };
+
+  for (let i = index; i < data.length; i++) {
+    if (!isRowDataValid(data[i])) {
+      const error = `Row ${i} is invalid or missing required data`;
+      console.error(error);
+
+      // Send error to background script for logging
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: error,
+      });
+
+      continue; // Skip this row and continue with the next one
+    }
+  }
 
   const modalObserverCallback = (mutationsList, observer) => {
     try {
@@ -396,7 +420,7 @@ function clickSaveAndContinue() {
   } finally {
     setTimeout(() => {
       clickRiskToleranceButtonAfterDelay();
-    }, 4000);
+    }, 6000);
   }
 }
 // Step four-two
@@ -664,7 +688,6 @@ function clickAddAccountButton() {
 
 //  TRY AND CATCH
 function setProposalAmount() {
-  // Find the input field for the proposal amount by its aria-label
   const proposalAmountInput = document.querySelector(
     'input[aria-label="Proposal amount"]'
   );
@@ -672,18 +695,26 @@ function setProposalAmount() {
   if (proposalAmountInput) {
     // Parse the globalProposalAmount as a float number and ensure it's a finite number
     const amount = parseFloat(globalProposalAmount);
-    if (isFinite(amount)) {
-      // Set the value of the input to the numeric globalProposalAmount
-      proposalAmountInput.value = amount;
+    try {
+      if (isFinite(amount)) {
+        // Set the value of the input to the numeric globalProposalAmount
+        proposalAmountInput.value = amount;
 
-      // Simulate a change event to notify any JavaScript listening to this event
-      const event = new Event("change", { bubbles: true });
-      proposalAmountInput.dispatchEvent(event);
+        // Simulate a change event to notify any JavaScript listening to this event
+        const event = new Event("change", { bubbles: true });
+        proposalAmountInput.dispatchEvent(event);
+      }
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
+      setTimeout(() => {
+        clickRegistrationTypeDropdown();
+      }, 2000);
     }
   }
-  setTimeout(() => {
-    clickRegistrationTypeDropdown();
-  }, 2000);
 }
 
 // step five-three: Click select registration type
@@ -693,20 +724,27 @@ function clickRegistrationTypeDropdown() {
   );
 
   if (dropdown) {
-    dropdown.focus();
-    ["mousedown", "mouseup", "click"].forEach((eventType) => {
-      dropdown.dispatchEvent(
-        new MouseEvent(eventType, {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-        })
-      );
-    });
-
-    setTimeout(() => {
-      clickRegistrationTypeOption();
-    }, 2000); // 2-second delay
+    try {
+      dropdown.focus();
+      ["mousedown", "mouseup", "click"].forEach((eventType) => {
+        dropdown.dispatchEvent(
+          new MouseEvent(eventType, {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+          })
+        );
+      });
+    } catch (error) {
+      chrome.runtime.sendMessage({
+        type: "logError",
+        error: "Error in function XYZ: " + error.message,
+      });
+    } finally {
+      setTimeout(() => {
+        clickRegistrationTypeOption();
+      }, 2000); // 2-second delay
+    }
   }
 }
 
@@ -737,6 +775,7 @@ function clickRegistrationTypeOption() {
     }
     return false; // Indicate failure
   };
+
   function clickSelectOwnerButton() {
     // Find and click the "select owner" button
     const selectOwnerButton = document.querySelector(

@@ -17,21 +17,11 @@
   </head>
   <body>
     <h1>Error Log</h1>
-    <div id="errorLog"></div>
-    <script src="error-log.js">
-              document.addEventListener('DOMContentLoaded', function () {
-          chrome.storage.local.get(['errorLogs'], function (data) {
-              const errorLogContainer = document.getElementById('errorLog');
-              const errorLogs = data.errorLogs || [];
 
-              errorLogs.forEach(error => {
-                  const errorElement = document.createElement('div');
-                  errorElement.classList.add('error-container');
-                  errorElement.textContent = error;
-                  errorLogContainer.appendChild(errorElement);
-              });
-          });
-      });
-    </script>
+    <div id="metadata"></div>
+
+    <div id="errorLog"></div>
+
+    <script src="error-log.js"></script>
   </body>
 </html>

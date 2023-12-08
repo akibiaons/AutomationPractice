@@ -6,17 +6,91 @@ let currentIndex = 29; // Starting index
 let excelData;
 let errorLogs = [];
 let totalIndexes;
+let isNewFileUploaded = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "setTotalIndexes") {
     totalIndexes = message.totalIndexes;
   }
+  if (message.action === "openErrorLog") {
+    openErrorLogTab();
+  }
+
+  if (message.action === "fileUploaded") {
+    isNewFileUploaded = true;
+  }
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   if (message.type === "logError") {
-    errorLogs.push({ tabId: sender.tab.id, error: message.error });
-    console.log(`Error logged for index ${currentIndex}:`, message.error);
+    chrome.storage.local.get(
+      {
+        errorLogs: [],
+        totalRows: 0,
+        successfulRows: 0,
+        fileName: "",
+        lastProcessedIndex: 0,
+      },
+      function (data) {
+        let {
+          errorLogs,
+          totalRows,
+          successfulRows,
+          fileName,
+          lastProcessedIndex,
+        } = data;
+        errorLogs.push({
+          error: message.error,
+          rowIndex: message.rowIndex,
+          // ... other details from the message
+        });
+
+        // Update the last processed index and successful rows if the current index is greater
+        if (message.rowIndex > lastProcessedIndex) {
+          lastProcessedIndex = message.rowIndex;
+          // Increment successful rows only if there's no error message
+          if (!message.error) {
+            successfulRows++;
+          }
+        }
+
+        // Save the updated error logs and metadata
+        chrome.storage.local.set(
+          {
+            errorLogs,
+            totalRows, // This would be set elsewhere when processing starts
+            successfulRows,
+            fileName, // This would be set elsewhere when processing starts
+            lastProcessedIndex,
+          },
+          function () {
+            if (chrome.runtime.lastError) {
+              console.error(
+                "Error saving the error logs:",
+                chrome.runtime.lastError
+              );
+            }
+          }
+        );
+      }
+    );
+  }
+  if (message.action === "closeTab") {
+    // Increment currentIndex only when the tab is closed
+    currentIndex++;
+
+    // Save the new currentIndex immediately
+    chrome.storage.local.set({ currentIndex: currentIndex }, function () {
+      if (chrome.runtime.lastError) {
+        console.error("Error setting currentIndex:", chrome.runtime.lastError);
+      } else {
+        console.log("Index saved to storage:", currentIndex);
+        sendStartNextProposalMessage();
+      }
+    });
+
+    // Close the tab as before
+    chrome.tabs.remove(sender.tab.id);
   }
 });
 
@@ -26,9 +100,6 @@ function initializeExtension() {
     currentIndex = data.currentIndex || 29;
     console.log("Current index from storage:", currentIndex);
   });
-
-  // Now, open the error log tab immediately
-  openErrorLogTab();
 }
 
 // This part of the script monitors any navigation to certain URLS **
@@ -91,12 +162,13 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
             // Sending Message After Delay:
             setTimeout(() => {
               console.log("Sending automateData message to tab");
+              openErrorLogTab(); // Open error log tab if a new file was uploaded
               chrome.tabs.sendMessage(tabId, {
                 action: "automateData",
-                data: excelData, // The entire data array
-                currentIndex: currentIndex, // Current index
+                data: data.excelData,
+                currentIndex: data.currentIndex,
               });
-            }, 2000); // A 2 second delay
+            }, 2000);
           }
         }
       );
@@ -131,38 +203,13 @@ function sendStartNextProposalMessage() {
   }, 3000); // Wait for 3000 milliseconds (3 seconds) before checking
 }
 
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-  if (message.action === "closeTab") {
-    // Increment currentIndex only when the tab is closed
-    currentIndex++;
-    checkIfProcessingComplete();
-    // Save the new currentIndex immediately
-    chrome.storage.local.set({ currentIndex: currentIndex }, function () {
-      if (chrome.runtime.lastError) {
-        console.error("Error setting currentIndex:", chrome.runtime.lastError);
-      } else {
-        console.log("Index saved to storage:", currentIndex);
-        sendStartNextProposalMessage();
-      }
-    });
-
-    // Close the tab as before
-    chrome.tabs.remove(sender.tab.id);
-  }
-});
-
 function openErrorLogTab() {
-  chrome.storage.local.set({ errorLogs: errorLogs }, function () {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL("error-log.html"),
+  if (isNewFileUploaded) {
+    chrome.storage.local.set({ errorLogs: errorLogs }, function () {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL("error-log.html"),
+      });
     });
-  });
-}
-
-function checkIfProcessingComplete() {
-  chrome.storage.local.get(["currentIndex", "totalIndexes"], function (data) {
-    if (data.currentIndex >= data.totalIndexes) {
-      openErrorLogTab();
-    }
-  });
+    isNewFileUploaded = false; // Reset flag after opening error log tab
+  }
 }

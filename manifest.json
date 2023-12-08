@@ -17,5 +17,11 @@
   ],
   "background": {
     "service_worker": "service_worker.js"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["error-log.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
